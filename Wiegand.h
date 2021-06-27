@@ -13,7 +13,7 @@ class WIEGAND {
 
 public:
 	WIEGAND();
-	void begin(bool GateA, bool GateB, bool GateC);
+	void begin(bool GateA, bool GateB, bool GateC, bool GateD);
 	
 	bool available();
 	unsigned long getCode();
@@ -26,6 +26,8 @@ public:
 	int D1PinB ;
 	int D0PinC ;
 	int D1PinC ;
+	int D0PinD ;
+	int D1PinD ;
 	
 	
 private:
@@ -34,7 +36,9 @@ private:
 	static void ReadD0B();
 	static void ReadD1B();	
 	static void ReadD0C();
-	static void ReadD1C();		
+	static void ReadD1C();
+	static void ReadD0D();
+	static void ReadD1D();	
 	static bool DoWiegandConversion ();
 	static unsigned long GetCardId (unsigned long *codehigh, unsigned long *codelow, char bitlength);
 	
@@ -59,6 +63,12 @@ private:
 	static int				_bitCountC;	
 	static int				_wiegandTypeC;
 	static unsigned long	_codeC;
+	
+	static unsigned long 	_cardTempHighD;
+	static unsigned long 	_cardTempD;
+	static int				_bitCountD;	
+	static int				_wiegandTypeD;
+	static unsigned long	_codeD;
 };
 
 #endif
