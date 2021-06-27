@@ -2,7 +2,7 @@
 
 unsigned long WIEGAND::_sysTick=0;
 unsigned long WIEGAND::_lastWiegand=0;
-int			  WIEGAND::_GateActive=0;    // 1 = Active A   --   2 = Active B  ----  3 = Active C 
+int			  WIEGAND::_GateActive=0;    // 1 = Active A   --   2 = Active B  ----  3 = Active C  --- 4 = Active D
 
 unsigned long WIEGAND::_cardTempHighA=0;
 unsigned long WIEGAND::_cardTempA=0;
@@ -23,6 +23,13 @@ int 		  WIEGAND::_bitCountC=0;
 int			  WIEGAND::_wiegandTypeC=0;
 
 
+unsigned long WIEGAND::_cardTempHighD=0;
+unsigned long WIEGAND::_cardTempD=0;
+unsigned long WIEGAND::_codeD=0;
+int 		  WIEGAND::_bitCountD=0;	
+int			  WIEGAND::_wiegandTypeD=0;
+
+
 WIEGAND::WIEGAND()
 {
 
@@ -41,6 +48,9 @@ unsigned long WIEGAND::getCode()
 	case 3:
 		return _codeC;
       break;
+	case 4:
+		return _codeD;
+      break;
     default: 
 		return 0;
   }
@@ -57,6 +67,8 @@ int WIEGAND::getWiegandType()
       break;
 	case 3:
 		return _wiegandTypeC;
+	case 4:
+		return _wiegandTypeD;
       break;
     default: 
 		return 0;
@@ -74,7 +86,7 @@ bool WIEGAND::available()
 	return DoWiegandConversion();
 }
 
-void WIEGAND::begin(bool GateA, bool GateB, bool GateC)
+void WIEGAND::begin(bool GateA, bool GateB, bool GateC, bool GateD)
 {
 	_sysTick=millis();
 	_lastWiegand = 0;
@@ -121,12 +133,28 @@ void WIEGAND::begin(bool GateA, bool GateB, bool GateC)
 		attachInterrupt(digitalPinToInterrupt(D1PinC), ReadD1C, FALLING);	// Hardware interrupt - high to low pulse	
 	}
 	
+	if (GateD == 1 ) 
+	{		
+		_cardTempHighD = 0;
+		_cardTempD = 0;
+		_codeD = 0;
+		_wiegandTypeD = 0;
+		_bitCountD = 0; 
+
+		pinMode(D0PinD, INPUT);					// Set D0 pin as input
+		pinMode(D1PinD, INPUT);					// Set D1 pin as input
+		attachInterrupt(digitalPinToInterrupt(D0PinD), ReadD0D, FALLING);	// Hardware interrupt - high to low pulse
+		attachInterrupt(digitalPinToInterrupt(D1PinD), ReadD1D, FALLING);	// Hardware interrupt - high to low pulse	
+	}
+	
 	Serial.print("GateA Enabled = ");
 	Serial.println(GateA);
 	Serial.print("GateB Enabled = ");
 	Serial.println(GateB);
 	Serial.print("GateC Enabled = ");
 	Serial.println(GateC);
+	Serial.print("GateD Enabled = ");
+	Serial.println(GateD);
 		
 }
 
@@ -234,6 +262,39 @@ void WIEGAND::ReadD1C()
 	_lastWiegand = _sysTick;	// Keep track of last wiegand bit received
 }
 
+void WIEGAND::ReadD0D ()
+{
+	_bitCountD++;				// Increament bit count for Interrupt connected to D0
+	if (_bitCountD>31)			// If bit count more than 31, process high bits
+	{
+		_cardTempHighD |= ((0x80000000 & _cardTempD)>>31);	//	shift value to high bits
+		_cardTempHighD <<= 1;
+		_cardTempD <<=1;
+	}
+	else
+	{
+		_cardTempD <<= 1;		// D0 represent binary 0, so just left shift card data
+	}
+	_lastWiegand = _sysTick;	// Keep track of last wiegand bit received
+}
+
+void WIEGAND::ReadD1D()
+{
+	_bitCountD ++;				// Increment bit count for Interrupt connected to D1
+	if (_bitCountD>31)			// If bit count more than 31, process high bits
+	{
+		_cardTempHighD |= ((0x80000000 & _cardTempD)>>31);	// shift value to high bits
+		_cardTempHighD <<= 1;
+		_cardTempD |= 1;
+		_cardTempD <<=1;
+	}
+	else
+	{
+		_cardTempD |= 1;			// D1 represent binary 1, so OR card data with 1 then
+		_cardTempD <<= 1;		// left shift card data
+	}
+	_lastWiegand = _sysTick;	// Keep track of last wiegand bit received
+}
 
 unsigned long WIEGAND::GetCardId (unsigned long *codehigh, unsigned long *codelow, char bitlength)
 {
@@ -257,12 +318,13 @@ bool WIEGAND::DoWiegandConversion ()
 	unsigned long cardIDA;
 	unsigned long cardIDB;
 	unsigned long cardIDC;
+	unsigned long cardIDD;
 
 	
 	_sysTick=millis();
 	if ((_sysTick - _lastWiegand) > 25)								// if no more signal coming through after 25ms
 	{
-		if ((_bitCountA==26) || (_bitCountA==34) || (_bitCountA==8) || (_bitCountB==26) || (_bitCountB==34) || (_bitCountB==8) || (_bitCountC==26) || (_bitCountC==34) || (_bitCountC==8) ) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
+		if ((_bitCountA==26) || (_bitCountA==34) || (_bitCountA==8) || (_bitCountB==26) || (_bitCountB==34) || (_bitCountB==8) || (_bitCountC==26) || (_bitCountC==34) || (_bitCountC==8) || (_bitCountD==26) || (_bitCountD==34) || (_bitCountD==8) ) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
 		{
 			if ((_bitCountA==26) || (_bitCountA==34) || (_bitCountA==8)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
 			{
@@ -422,15 +484,15 @@ bool WIEGAND::DoWiegandConversion ()
 					{
 						if (lowNibble==0x0b)					// ENT pressed
 						{
-							_codeB=0x0d;							
+							_codeC=0x0d;							
 						}
 						else if (lowNibble==0x0a)				// ESC pressed
 						{
-							_codeB=0x1b;							
+							_codeC=0x1b;							
 						}
 						else
 						{
-							_codeB=(int)lowNibble;				// 0 - 9 keys
+							_codeC=(int)lowNibble;				// 0 - 9 keys
 						}
 						return true;
 					}
@@ -448,7 +510,65 @@ bool WIEGAND::DoWiegandConversion ()
 			
 			// fine controllo accesso C			
 			
-	
+			// inizio controllo accesso D 
+			if ((_bitCountD==26) || (_bitCountD==34) || (_bitCountD==8)) 	// bitCount for keypress=8, Wiegand 26=26, Wiegand 34=34
+			{
+				_cardTempD >>= 1;			// shift right 1 bit to get back the real value - interrupt done 1 left shift in advance
+				if (_bitCountD>32)			// bit count more than 32 bits, shift high bits right to make adjustment
+					_cardTempHighD >>= 1;	
+
+				if((_bitCountD==26) || (_bitCountD==34))		// wiegand 26 or wiegand 34
+				{
+					cardIDD = GetCardId (&_cardTempHighD, &_cardTempD, _bitCountD);
+					_wiegandTypeD=_bitCountD;
+					_bitCountD=0;
+					_cardTempD=0;
+					_cardTempHighD=0;
+					_GateActive=4;
+					_codeD=cardIDC;
+					return true;				
+				}
+				else if (_bitCountD==8)		// keypress wiegand
+				{
+					// 8-bit Wiegand keyboard data, high nibble is the "NOT" of low nibble
+					// eg if key 1 pressed, data=E1 in binary 11100001 , high nibble=1110 , low nibble = 0001 
+					char highNibble = (_cardTempD & 0xf0) >>4;
+					char lowNibble = (_cardTempD & 0x0f);
+					_wiegandTypeD=_bitCountD;					
+					_bitCountD=0;
+					_cardTempD=0;
+					_cardTempHighD=0;
+					_GateActive=4;
+				
+					if (lowNibble == (~highNibble & 0x0f))		// check if low nibble matches the "NOT" of high nibble.
+					{
+						if (lowNibble==0x0b)					// ENT pressed
+						{
+							_codeD=0x0d;							
+						}
+						else if (lowNibble==0x0a)				// ESC pressed
+						{
+							_codeD=0x1b;							
+						}
+						else
+						{
+							_codeD=(int)lowNibble;				// 0 - 9 keys
+						}
+						return true;
+					}
+				}
+			}
+			else
+			{
+				// well time over 25 ms and bitCount !=8 , !=26, !=34 , must be noise or nothing then.
+				_lastWiegand=_sysTick;
+				_bitCountD=0;			
+				_cardTempD=0;
+				_cardTempHighD=0;
+				_GateActive=0;
+			}
+			// fine controllo accesso D
+			
 		return false;
 		}
 		else
